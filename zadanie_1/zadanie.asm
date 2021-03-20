@@ -35,6 +35,8 @@ SegData segment para public 'data'
 	HelpMessage db 'zadanie [prepinace] subor',CharCr,CharLf,'/h - zobrazi tuto hlasku$'
 	ErrorInvalidSwitch db 'Neplatny prepinac!',CharCr,CharLf,'Pozrite napovedu pre viac info$'
 
+	ArgsParseStatus db 00h
+	ShowHelp db 00h
 	FileName db 80h dup(?)
 SegData ends
 
@@ -53,57 +55,82 @@ Main:
 ; Nastavenie segmentovych registrov
 ; es - Datovy segment
 ; ds - Ostava na PSP
+	push seg SegData
+	push offset ArgsParseStatus
+	push offset FileName
+	push offset ShowHelp
+	call ArgsParse
+
 	mov ax, seg SegData
-	mov es, ax
+	mov ds, ax
+	cmp ArgsParseStatus, 00h
+	jne ShowErrorInvalidSwitch
+	cmp ShowHelp, 01h
+	je ShowHelpXXX
+	jmp ProcessFile
+;	mov ax, seg SegData
+;	mov es, ax
+;
+;; Nasmerovanie na PSP
+;	mov si, 81h
+;DFOSJH:
+;	call ArgsSkipDelimiters
+;
+;; Zisti ci to je nazov suboru alebo prepinac
+;	cmp al, '/'
+;	jnz AgrsParseFileName
+;
+;; Over ci to je /h
+;	lodsb
+;	cmp al, 'h'
+;	jnz ArgsInvalidSwitch
+;	lodsb ; Nasledujuci znak musi byt prazdny aby to bol platny prepinac
+;	cmp al, CharCr ; Sme na konci argumentov?
+;	jz ShowHelp
+;
+;ShowHelp:
+;	push seg HelpMessage
+;	push offset HelpMessage
+;	call StrPrint
+;	jmp MainExit
+;
+;ArgsInvalidSwitch:
+;	push seg ErrorInvalidSwitch
+;	push offset ErrorInvalidSwitch
+;	call StrPrint
+;	jmp MainExit
+;
+;AgrsParseFileName:
+;	cmp al, CharCr ; Sme na konci argumentov?
+;	je ProcessFile
+;	lea di, FileName
+;
+;AgrsParseFileNameLoop:
+;	stosb
+;	lodsb
+;	cmp al, CharCr ; Sme na konci argumentov?
+;	je ArgsFinishFileName
+;	call ArgsIsDelimiter
+;	jne AgrsParseFileNameLoop
+;
+;ArgsFinishFileName:
+;	mov al, 0
+;	stosb
+;	dec si
+;	jmp DFOSJH
 
-; Nasmerovanie na PSP
-	mov si, 81h
-DFOSJH:
-	call ArgsSkipDelimiters
-
-; Zisti ci to je nazov suboru alebo prepinac
-	cmp al, '/'
-	jnz AgrsParseFileName
-
-; Over ci to je /h
-	lodsb
-	cmp al, 'h'
-	jnz ArgsInvalidSwitch
-	lodsb ; Nasledujuci znak musi byt prazdny aby to bol platny prepinac
-	cmp al, CharCr ; Sme na konci argumentov?
-	jz ShowHelp
-
-ShowHelp:
-	push seg HelpMessage
-	push offset HelpMessage
-	call StrPrint
-	jmp MainExit
-
-ArgsInvalidSwitch:
+ShowErrorInvalidSwitch:
 	push seg ErrorInvalidSwitch
 	push offset ErrorInvalidSwitch
 	call StrPrint
 	jmp MainExit
 
 
-AgrsParseFileName:
-	cmp al, CharCr ; Sme na konci argumentov?
-	je ProcessFile
-	lea di, FileName
-
-AgrsParseFileNameLoop:
-	stosb
-	lodsb
-	cmp al, CharCr ; Sme na konci argumentov?
-	je ArgsFinishFileName
-	call ArgsIsDelimiter
-	jne AgrsParseFileNameLoop
-
-ArgsFinishFileName:
-	mov al, 0
-	stosb
-	dec si
-	jmp DFOSJH
+ShowHelpXXX:
+	push seg HelpMessage
+	push offset HelpMessage
+	call StrPrint
+	jmp MainExit
 
 
 ProcessFile:
