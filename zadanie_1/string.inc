@@ -1,5 +1,6 @@
 ; Porovna ci znak v AL je prazdny znak
-; IN: al = x
+; IN:
+; 	al - Obsahuje provnavany znak
 StrIsWhitespace proc
 	cmp al, CharTab
 	je StrIsWhitespaceRet
@@ -13,11 +14,14 @@ StrIsWhitespaceRet:
 StrIsWhitespace endp
 
 
-; Vypise retazec na obrazovku
-StrPrint proc uses ax dx ds, pSegment, pOffset
-	mov ax, pSegment
+; Vypise retazec ukonceny s "$" na obrazovku
+; IN:
+; 	strSegment - adresa segmentu v ktorom sa nachadza retazec
+; 	strOffset - offset na ktorom sa nachadza retazec
+StrPrint proc uses ax dx ds, strSegment, strOffset
+	mov ax, strSegment
 	mov ds, ax
-	mov dx, pOffset
+	mov dx, strOffset
 
 	mov ah, 09h
 	int 21h

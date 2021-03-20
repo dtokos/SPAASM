@@ -1,10 +1,15 @@
-ArgsSkipWhitespace proc
+; Preskoci oddelovace prikazoveho riadku
+; Ocakava datovy segment nasmerovany na PSP a spravne nastaveny SI
+ArgsSkipDelimiters proc
 	lodsb
 	call ArgsIsDelimiter
-	je ArgsSkipWhitespace
+	je ArgsSkipDelimiters
 	ret
-ArgsSkipWhitespace endp
+ArgsSkipDelimiters endp
 
+; Overi ci znak v AL je oddelovac
+; IN:
+; 	al - obsahuje overovany znak
 ArgsIsDelimiter proc
 	cmp al, CharSpace
 	je ArgsIsDelimiterRet

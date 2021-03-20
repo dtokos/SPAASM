@@ -59,7 +59,7 @@ Main:
 ; Nasmerovanie na PSP
 	mov si, 81h
 DFOSJH:
-	call ArgsSkipWhitespace
+	call ArgsSkipDelimiters
 
 ; Zisti ci to je nazov suboru alebo prepinac
 	cmp al, '/'
