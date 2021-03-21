@@ -11,6 +11,11 @@
 ; V subore sa mozu nachadzat medzery, taby, prazdne riadky alebo ich kombinacia.
 ; Program vypisuje iba najdene cisla a prazdne znaky vynechava.
 
+; Ulohy z 2. casti:
+; 7. Plus 1 bod: Ak budú korektne spracované vstupné súbory s veľkosťou nad 64 kB. (vid test_6.txt)
+; 11.Plus 1 bod je možné získať za (zmysluplné) použitie reťazcových inštrukcií (MOVS, CMPS, STOS, etc.).
+; 12.Plus 1 bod je možné získať za (dobré) komentáre, resp. dokumentáciu, v anglickom jazyku.
+
 .model small,pascal
 
 ; -------------------------------------------------------------------
@@ -46,7 +51,7 @@ SegData segment para public 'data'
 	FileName db 80h dup(?)
 
 	FileHandle dw ?
-	FileBuffer db 400h dup(?)
+	FileBuffer db 8000h dup(?)
 	FileBufferSize equ $ - FileBuffer
 	BytesRead dw ?
 
@@ -130,6 +135,8 @@ ShowErrorOpenFailed:
 	call DosPrintString
 	jmp MainExit
 
+; Vypise hlasku o tom ze pri citani zo suboru nastala chyba
+; Zatvori subor
 ShowBadReadMessage:
 	push seg ErrorBadRead
 	push offset ErrorBadRead
@@ -141,24 +148,28 @@ ShowBadReadMessage:
 ProcessFile:
 	push offset FileName
 	call DosOpenFile
-	jc ShowErrorOpenFailed
+	jc ShowErrorOpenFailed ; Podarilo sa otvorit subor?
 	mov FileHandle, ax
 
+; Cyklus na citanie zo suboru
+; Ak je pocet precitanych bajtov = 0 tak skoncime
+; Zatvori subor
 ReadLoop:
 	push FileHandle
 	push offset FileBuffer
 	push FileBufferSize
 	call DosReadFile
-	jc ShowBadReadMessage
+	jc ShowBadReadMessage ; Podarilo sa citanie zo suboru?
 	mov BytesRead, ax
-	cmp BytesRead, 00h
-	jne ReadLoop2
-	jmp CloseFile
+	cmp BytesRead, 00h ; Sme uz na konci suboru?
+	jne ReadLoop2 ; Ak nie tak pokracuj v spracovani
+	jmp CloseFile ; Inak zatvor subor a skonci
 ReadLoop2:
 	lea si, FileBuffer
 
+; V subore su ignorovane prazdne znaky na zaciatkoch riadkov
 SkipWhitespace:
-	cmp BytesRead, 00h
+	cmp BytesRead, 00h ; Dostali sme sa na koniec suboru?
 	je ReadLoop
 
 	dec BytesRead
@@ -166,94 +177,109 @@ SkipWhitespace:
 	call StrIsWhitespace
 	je SkipWhitespace
 
-	mov bx, 00h
+	mov bx, 00h ; Naslo sa potencionalne cislo. Pripravime si BX na ukladanie sparsovaneho cisla.
 
+; Nasiel sa znak ktory nie je prazdny
+; Overime ci to je cislo a zacneme parsovat
+; Parsovanie prebieha aritmeticky (stare * 10 + nove)
+; Ak cislo pretecie (> 65535) tak skoncime
 NumberLoop:
-	cmp al, '0'
-	jb ShowInvalidChar
-	cmp al, '9'
-	jg ShowInvalidChar
-	xchg ax, bx
-	mov cx, 0ah
-	mul cx
-	xchg ax, bx
-	and al, 0fh
-	mov ah, 00h
-	add bx, ax
-	jc ShowNumberTooBig
+	cmp al, '0' ; Je znak cislo z rozsahu <0, 9>?
+	jb ShowInvalidChar ; Ak nie tak koncime
+	cmp al, '9' ; Je znak cislo z rozsahu <0, 9>?
+	jg ShowInvalidChar ; Ak nie tak koncime
+	xchg ax, bx ; Prehodime si stare cislo a novy prirastok
+	mov cx, 0ah ; Pripravime si cislo 10
+	mul cx ; Vynasobime stare cislo
+	xchg ax, bx ; Prehodime cisla spat
+	and al, 0fh ; Spravime z ascii znaku cislo pomocou bitwise and
+	mov ah, 00h ; Zresetujeme AH aby vysledok bol platne 16bit cislo
+	add bx, ax ; Scitame stare cislo a prirastok
+	jc ShowNumberTooBig ; Ak sa presiahla hranica tak skoncime
 	
+	; Ak sme na konci buffera alebo uz nenasleduje dalsie cislo tak ho mozme naformatovat a vypisat
 	dec BytesRead
 	cmp BytesRead, 00h
 	je FormatNumber
 	lodsb
-	cmp al, CharCr
-	je FormatNumber
 	call StrIsWhitespace
 	je FormatNumber
 	jmp NumberLoop
 
+; Vypise hlasku o tom ze v subore sa nachadza neplatny znak
+; Zatvori subor
 ShowInvalidChar:
 	push seg ErrorInvalidChar
 	push offset ErrorInvalidChar
 	call DosPrintString
 	jmp CloseFile
 
+; Vypise hlasku o tom ze v subore sa nachadza priliz velke cislo
+; Zatvori subor
 ShowNumberTooBig:
 	push seg ErrorNumberTooBig
 	push offset ErrorNumberTooBig
 	call DosPrintString
 	jmp CloseFile
 
+; Naformatuje cislo, oddeli skupiny cifier medzerami
+; Pri formatovani delime desiatimi a uchovavame si zvysok
 FormatNumber:
-	mov di, offset NumberBuffer
-	mov ax, bx
-	mov bx, 0ah
-	mov cl, 00h
+	mov di, offset NumberBuffer ; Nasmerujeme si DI na buffer aby sme veteli pouzivat stringove instrukcie
+	mov ax, bx ; Presunieme cislo do akumulatora
+	mov bx, 0ah ; Do BX si pripravime delitel 10
+	mov cl, 00h ; V CL budeme pocitat pocet cifier
 FormatNumberLoop:
-	mov dx, 00h
-	div bx
-	add dx, '0'
-	xchg ax, dx
-	stosb
-	inc cl
-	cmp cl, 03h
-	jne FormatNumberLoop2
-	cmp dx, 00h
-	je FormatNumberLoop2
-	mov al, CharSpace
+	mov dx, 00h ; Prevencia pred delenim nulou
+	div bx ; Vydelime cislo 10
+	add dx, '0' ; Spravime zo zvysku (poslednej cifri) ascii znak
+	xchg ax, dx ; Vymenime AX a DX aby sme vedeli pouzit stringove instrukcie
+	stosb ; Pridame znak do buffera
+	inc cl ; Zvysime pocet cifier
+	cmp cl, 03h ; Vypisali sme skupinu troch cifier?
+	jne FormatNumberLoop2 ; Ak nie tak pokracujeme
+	cmp dx, 00h ; Nasleduju este dalsie cifry? (Aby sa zle neformatovali stovky " 123")
+	je FormatNumberLoop2 ; Ak nie tak pokracujeme
+	mov al, CharSpace ; Inak pridame medzeru
 	stosb
 FormatNumberLoop2:
-	xchg ax, dx
-	cmp ax, 00h
-	jne FormatNumberLoop
+	xchg ax, dx ; Vymenime AX, DX aby sme mohli pokracovat v deleni
+	cmp ax, 00h ; Minuli sa nam uz vsetky cifry?
+	jne FormatNumberLoop ; Ak nie tak pokracujeme vo formatovani
 
+; Vypise cislo na obrazovku
+; Kedze pri deleni sa nam cislo "otoci" tak ho vypisujeme odzadu
 PrintNumber:
-	dec di
-	mov dl, [di]
-	call DosPrintChar
-	cmp di, offset NumberBuffer
-	jne PrintNumber
+	dec di ; Na konci formatovania sme jeden znak za poslednou cifrou tak sa musime vratit
+	mov dl, [di] ; Nacitame si znak z adresy ulozenej v di
+	call DosPrintChar ; Vypiseme ho
+	cmp di, offset NumberBuffer ; Vypisali sme uz vsetky znaky?
+	jne PrintNumber ; Ak nie tak vypisujeme dalej
 
-	mov dl, CharCr
+	mov dl, CharCr ; Vypiseme este CR
 	call DosPrintChar
-	mov dl, CharLf
+	mov dl, CharLf ; Vypiseme este LF
 	call DosPrintChar
 
+; Preskocime prazdne znaky na konci suboru
 SkipWhitespaceEnd:
-	dec BytesRead
+	dec BytesRead ; Pokracujeme preskakovanim prazdnych znakov na konci riadka
 	lodsb
-	cmp al, CharCr
-	je SkipWhitespaceEndJump
-	cmp al, CharLf
-	je SkipWhitespaceEndJump
-	call StrIsWhitespace
-	je SkipWhitespaceEnd
+	cmp al, CharCr ; Nasiel sa CR?
+	je SkipWhitespaceEndJump ; Ideme na dalsi riadok a hladame dalsie cisla
+	cmp al, CharLf ; Nasiel alebo LF? (mal som problem so subormi vytvorenymi na Unix-like pocitacoch)
+	je SkipWhitespaceEndJump ; Ideme na dalsi riadok a hladame dalsie cisla
+	call StrIsWhitespace ; Je to iba prazdny znak?
+	je SkipWhitespaceEnd ; Pokracujeme v preskakovani
 
+; Relativny skok uz nestacil tak toto je skokansky mostik :)
+; Skace na pokracovanie citania znakov na zaciatku riadku
 SkipWhitespaceEndJump:
 	dec si
 	inc BytesRead
 	jmp SkipWhitespace
 
+; Zatvori subor
 CloseFile:
 	push FileHandle
 	call DosCloseFile
