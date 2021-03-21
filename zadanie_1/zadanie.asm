@@ -34,6 +34,8 @@ SegData segment para public 'data'
 	TestMessage db 'Process file$'
 	HelpMessage db 'zadanie [prepinace] subor',CharCr,CharLf,'/h - zobrazi tuto hlasku$'
 	ErrorInvalidSwitch db 'Neplatny prepinac!',CharCr,CharLf,'Pozrite napovedu pre viac info$'
+	ErrorNoFileName db 'Nezadany nazov suboru!',CharCr,CharLf,'Pozrite napovedu pre viac info$'
+	ErrorMultipleFileNames db 'Bolo zadanych viac suborov!',CharCr,CharLf,'Pozrite napovedu pre viac info$'
 
 	ArgsParseStatus db 00h
 	ShowHelp db 00h
@@ -52,85 +54,34 @@ SegCode segment para public 'code'
 	include string.inc
 
 Main:
-; Nastavenie segmentovych registrov
-; es - Datovy segment
-; ds - Ostava na PSP
+	; Spustenie parsovania command line argumentov
+	; Na zaciatku programu registre DS a ES smeruju na PSP
+	; Do procedury ArgsParse posielame adresu segmentu a offsety do ktorych ma ulozit vysledky
 	push seg SegData
 	push offset ArgsParseStatus
 	push offset FileName
 	push offset ShowHelp
 	call ArgsParse
 
+	; Nastavime ds na SegData kvoli lahsiemu adresovaniu
+	; PSP uz nebudeme potrebovat
 	mov ax, seg SegData
 	mov ds, ax
-	cmp ArgsParseStatus, 00h
-	jne ShowErrorInvalidSwitch
+	
+	; Vysporiadame sa s vysledkom parsovania
+	; Nenulovy error kod znamena chybu
+	cmp ArgsParseStatus, 01h
+	je ShowErrorInvalidSwitch
+	cmp ArgsParseStatus, 02h
+	je ShowErrorNoFileName
+	cmp ArgsParseStatus, 03h
+	je ShowErrorMultipleFileNames
+
+	; Pri parsovani argumentov nenastala chyba (error kod bol nula)
+	; Mozme teda zacat nieco robit podla vstupnych prepinacov a flagov
 	cmp ShowHelp, 01h
-	je ShowHelpXXX
+	je ShowHelpMessage
 	jmp ProcessFile
-;	mov ax, seg SegData
-;	mov es, ax
-;
-;; Nasmerovanie na PSP
-;	mov si, 81h
-;DFOSJH:
-;	call ArgsSkipDelimiters
-;
-;; Zisti ci to je nazov suboru alebo prepinac
-;	cmp al, '/'
-;	jnz AgrsParseFileName
-;
-;; Over ci to je /h
-;	lodsb
-;	cmp al, 'h'
-;	jnz ArgsInvalidSwitch
-;	lodsb ; Nasledujuci znak musi byt prazdny aby to bol platny prepinac
-;	cmp al, CharCr ; Sme na konci argumentov?
-;	jz ShowHelp
-;
-;ShowHelp:
-;	push seg HelpMessage
-;	push offset HelpMessage
-;	call StrPrint
-;	jmp MainExit
-;
-;ArgsInvalidSwitch:
-;	push seg ErrorInvalidSwitch
-;	push offset ErrorInvalidSwitch
-;	call StrPrint
-;	jmp MainExit
-;
-;AgrsParseFileName:
-;	cmp al, CharCr ; Sme na konci argumentov?
-;	je ProcessFile
-;	lea di, FileName
-;
-;AgrsParseFileNameLoop:
-;	stosb
-;	lodsb
-;	cmp al, CharCr ; Sme na konci argumentov?
-;	je ArgsFinishFileName
-;	call ArgsIsDelimiter
-;	jne AgrsParseFileNameLoop
-;
-;ArgsFinishFileName:
-;	mov al, 0
-;	stosb
-;	dec si
-;	jmp DFOSJH
-
-ShowErrorInvalidSwitch:
-	push seg ErrorInvalidSwitch
-	push offset ErrorInvalidSwitch
-	call StrPrint
-	jmp MainExit
-
-
-ShowHelpXXX:
-	push seg HelpMessage
-	push offset HelpMessage
-	call StrPrint
-	jmp MainExit
 
 
 ProcessFile:
@@ -139,6 +90,35 @@ ProcessFile:
 	call StrPrint
 	jmp MainExit
 
+; Vypis hlasku o tom ze sa nasiel neplatny prepinac
+ShowErrorInvalidSwitch:
+	push seg ErrorInvalidSwitch
+	push offset ErrorInvalidSwitch
+	call StrPrint
+	jmp MainExit
+
+; Vypis hlasku o tom ze chyba nazov suboru
+ShowErrorNoFileName:
+	push seg ErrorNoFileName
+	push offset ErrorNoFileName
+	call StrPrint
+	jmp MainExit
+
+; Vypis hlasku o tom ze sa nenasieli viacere nazovy suboru
+ShowErrorMultipleFileNames:
+	push seg ErrorMultipleFileNames
+	push offset ErrorMultipleFileNames
+	call StrPrint
+	jmp MainExit
+
+; Vypis pomocnu hlasku
+ShowHelpMessage:
+	push seg HelpMessage
+	push offset HelpMessage
+	call StrPrint
+	jmp MainExit
+
+; Ukonci program
 MainExit:
 	mov ah, 4ch
 	int 21h
