@@ -27,6 +27,8 @@ Options:
   -t TIMEOUT --timeout=TIMEOUT    Configures timeout after which inactive clients will be disconnected.
                                   Accepts values from <5, 3600> as seconds.
                                   [default: 600]
+  
+  -v --verbose                    Increases output verbosity.
 )";
 
 

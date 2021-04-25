@@ -27,6 +27,7 @@ struct App {
         in_port_t port;
         int backlog;
         int clientTimeout;
+        bool verbose;
     };
     
     struct Exception : public std::runtime_error {
@@ -34,6 +35,9 @@ struct App {
     };
     
     void handleSignal(int signal) {
+        if (verbose)
+            std::cerr << "[DEBUG] Handling signal " << signal << '\n';
+        
         if (signal == SIGTERM) {
             if (isRoot) {
                 killClients();
@@ -47,11 +51,19 @@ struct App {
     
     void start(const Options &options) {
         clientTimeout = options.clientTimeout;
+        verbose = options.verbose;
+        
+        if (verbose)
+            std::cerr << "[DEBUG] Starting app\n";
+        
         startServerSocket(options);
         startConsoleClient();
     }
     
     void run() {
+        if (verbose)
+            std::cerr << "[DEBUG] Run app\n";
+        
         while (true) {
             int clientFD = accept(serverSocketFD, nullptr, nullptr);
             if (clientFD < 0)
@@ -62,31 +74,44 @@ struct App {
     }
     
     void cleanup() {
+        if (verbose)
+            std::cerr << "[DEBUG] App cleanup\n";
+        
         if (serverSocketFD != -1) {
             shutdown(serverSocketFD, SHUT_RDWR);
             close(serverSocketFD);
         }
     }
     
-private:
+protected:
     bool isRoot{true};
     int serverSocketFD{-1};
     std::vector<pid_t> clients{};
     int clientTimeout{600000};
+    bool verbose{false};
     
     Tokenizer tokenizer{};
     TokenParser tokenParser{};
     
     void killClients() {
+        if (verbose)
+            std::cerr << "[DEBUG] Kill all clients\n";
+        
         for (const auto &clientPID : clients)
             kill(clientPID, SIGTERM);
     }
     
     void haltShell() {
+        if (verbose)
+            std::cerr << "[DEBUG] Execute halt command\n";
+        
         kill(getppid(), SIGTERM);
     }
     
     void startServerSocket(const Options &options) {
+        if (verbose)
+            std::cerr << "[DEBUG] Start server socket\n";
+        
         int socketFD = socket(PF_INET, SOCK_STREAM, 0);
         if (socketFD < 0)
             throw Exception("Could not open server socket\n" + std::string(std::strerror(errno)));
@@ -106,6 +131,9 @@ private:
     }
     
     void startConsoleClient() {
+        if (verbose)
+            std::cerr << "[DEBUG] Start console client\n";
+        
         const pid_t clientPID = fork();
         
         if (clientPID < 0)
@@ -120,6 +148,9 @@ private:
     }
     
     void startSocketClient(int sockFD) {
+        if (verbose)
+            std::cerr << "[DEBUG] Start socket client: " << sockFD << '\n';
+        
         const pid_t clientPID = fork();
         
         if (clientPID < 0)

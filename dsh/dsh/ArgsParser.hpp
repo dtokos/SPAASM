@@ -18,7 +18,8 @@ struct ArgsParser {
             parseSocketAddress(args["--address"]),
             parseSocketPort(args["--port"]),
             parseBacklog(args["--backlog"]),
-            parseClientTimeout(args["--timeout"])
+            parseClientTimeout(args["--timeout"]),
+            parseVerbose(args["--verbose"])
         };
     }
     
@@ -70,6 +71,10 @@ private:
         } catch (const std::out_of_range &e) {
             throw ArgsParser::Exception("Option 'timeout' is out of range");
         }
+    }
+    
+    bool parseVerbose(const docopt::value &value) {
+        return value.asBool();
     }
 };
 
