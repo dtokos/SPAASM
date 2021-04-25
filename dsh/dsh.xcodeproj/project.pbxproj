@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		984D587B26234D4300E37B15 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 984D587A26234D4300E37B15 /* main.cpp */; };
-		98BD2673262464C700C7C310 /* App.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 98BD2671262464C700C7C310 /* App.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -24,10 +23,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		9811A9D82631C858009EF70E /* Tokenizer.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Tokenizer.hpp; sourceTree = "<group>"; };
 		984D587726234D4300E37B15 /* dsh */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dsh; sourceTree = BUILT_PRODUCTS_DIR; };
 		984D587A26234D4300E37B15 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		98BD266E2624646B00C7C310 /* ArgsParser.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ArgsParser.hpp; sourceTree = "<group>"; };
-		98BD2671262464C700C7C310 /* App.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = App.cpp; sourceTree = "<group>"; };
 		98BD2672262464C700C7C310 /* App.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = App.hpp; sourceTree = "<group>"; };
 		98BD267A26246BA400C7C310 /* dsh.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = dsh.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -66,7 +65,7 @@
 				984D587A26234D4300E37B15 /* main.cpp */,
 				98BD266E2624646B00C7C310 /* ArgsParser.hpp */,
 				98BD2672262464C700C7C310 /* App.hpp */,
-				98BD2671262464C700C7C310 /* App.cpp */,
+				9811A9D82631C858009EF70E /* Tokenizer.hpp */,
 			);
 			path = dsh;
 			sourceTree = "<group>";
@@ -127,7 +126,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				98BD2673262464C700C7C310 /* App.cpp in Sources */,
 				984D587B26234D4300E37B15 /* main.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
