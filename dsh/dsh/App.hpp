@@ -10,16 +10,23 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <netinet/in.h>
 #include <time.h>
+#include <poll.h>
 #include "Tokenizer.hpp"
+#include "TokenParser.hpp"
+#include "Help.hpp"
+#include "Chdir.hpp"
+#include "ExternalProgram.hpp"
 
 struct App {
     struct Options {
         in_addr address;
         in_port_t port;
         int backlog;
+        int clientTimeout;
     };
     
     struct Exception : public std::runtime_error {
@@ -27,14 +34,19 @@ struct App {
     };
     
     void handleSignal(int signal) {
-        if (signal == SIGTERM && isRoot) {
-            killClients();
-            cleanup();
-            exit(EXIT_SUCCESS);
+        if (signal == SIGTERM) {
+            if (isRoot) {
+                killClients();
+                cleanup();
+                exit(EXIT_SUCCESS);
+            } else {
+                exit(EXIT_SUCCESS);
+            }
         }
     }
     
     void start(const Options &options) {
+        clientTimeout = options.clientTimeout;
         startServerSocket(options);
         startConsoleClient();
     }
@@ -58,13 +70,20 @@ struct App {
     
 private:
     bool isRoot{true};
-    Tokenizer tokenizer{};
     int serverSocketFD{-1};
     std::vector<pid_t> clients{};
+    int clientTimeout{600000};
+    
+    Tokenizer tokenizer{};
+    TokenParser tokenParser{};
     
     void killClients() {
         for (const auto &clientPID : clients)
             kill(clientPID, SIGTERM);
+    }
+    
+    void haltShell() {
+        kill(getppid(), SIGTERM);
     }
     
     void startServerSocket(const Options &options) {
@@ -122,9 +141,10 @@ private:
         
         while (true) {
             writePrompt();
-            std::getline(std::cin, input);
+            if (!getInput(input))
+                break;
             
-            const auto tokens = tokenizer.tokenize(input);
+            auto tokens = tokenizer.tokenize(input);
             
             if (tokens.size() == 0)
                 continue;
@@ -137,13 +157,25 @@ private:
                 break;
             }
             
-            for (const auto &t : tokens)
-                std::cout << t << '\n';
+            if (executeInternalProgram(tokens))
+                continue;
             
-            //std::cout << "Echo: " << input << '\n';
+            executeExternalProgram(tokens);
         }
         
         exit(EXIT_SUCCESS);
+    }
+    
+    bool getInput(std::string &input) {
+        pollfd inputFD{};
+        inputFD.fd = STDIN_FILENO;
+        inputFD.events = POLLIN;
+        if (poll(&inputFD, 1, clientTimeout) == 0)
+            return false;
+        
+        std::getline(std::cin, input);
+        
+        return true;
     }
     
     void writePrompt() {
@@ -153,7 +185,7 @@ private:
         
         std::cout << std::setfill('0') << std::setw(2) << time.tm_hour << ':'
             << std::setfill('0') << std::setw(2) << time.tm_min << ' '
-            << user << '@' << hostname << "# ";
+            << user << '@' << hostname << "# " << std::flush;
     }
     
     tm getTime() const {
@@ -173,8 +205,110 @@ private:
         return std::string(hostnameBuffer);
     }
     
-    void haltShell() {
-        kill(getppid(), SIGTERM);
+    bool executeInternalProgram(const std::vector<std::string> &tokens) {
+        if (tokens[0] == "help") {
+            HelpProgram().run();
+            return true;
+        } else if (tokens[0] == "cd") {
+            ChdirProgram().run(tokens);
+            return true;
+        }
+        
+        return false;
+    }
+    
+    void executeExternalProgram(std::vector<std::string> &tokens) {
+        auto pipeline = tokenParser.parse(tokens);
+        
+        if (pipeline.size() == 2) executePipeline(pipeline[0], pipeline[1]);
+        else executeSingleExternal(pipeline[0]);
+    }
+    
+    void executePipeline(ExternalProgram &programA, ExternalProgram &programB) {
+        int programPipe[2]{};
+        
+        if (pipe(programPipe) < 0) {
+            std::cerr << "Could not fork external program\n" << std::string(std::strerror(errno)) << '\n';
+            return;
+        }
+        
+        const pid_t programAPID = fork();
+        if (programAPID < 0) {
+            std::cerr << "Could not fork external program\n" << std::string(std::strerror(errno)) << '\n';
+            return;
+        } else if (programAPID == 0) {
+            if (programA.input != "")
+                redirectIOTo(programA.input, STDIN_FILENO, O_RDONLY);
+            
+            close(programPipe[0]);
+            dup2(programPipe[1], STDOUT_FILENO);
+            
+            execvp(programA.name, programA.args.data());
+            std::cerr << "Could not exec external program\n" + std::string(std::strerror(errno)) << '\n';
+            exit(EXIT_FAILURE);
+        }
+        
+        const pid_t programBPID = fork();
+        if (programBPID < 0) {
+            std::cerr << "Could not fork external program\n" << std::string(std::strerror(errno)) << '\n';
+            return;
+        } else if (programBPID == 0) {
+            if (programB.output != "")
+                redirectIOTo(programB.output, STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            
+            close(programPipe[1]);
+            dup2(programPipe[0], STDIN_FILENO);
+            
+            execvp(programB.name, programB.args.data());
+            std::cerr << "Could not exec external program\n" + std::string(std::strerror(errno)) << '\n';
+            exit(EXIT_FAILURE);
+        } else {
+            close(programPipe[0]);
+            close(programPipe[1]);
+            
+            waitForPID(programAPID);
+            waitForPID(programBPID);
+        }
+    }
+    
+    void executeSingleExternal(ExternalProgram &program) {
+        const pid_t programPID = fork();
+        
+        if (programPID < 0)
+            std::cerr << "Could not fork external program\n" << std::string(std::strerror(errno)) << '\n';
+        else if (programPID == 0) {
+            if (program.input != "")
+                redirectIOTo(program.input, STDIN_FILENO, O_RDONLY);
+            
+            if (program.output != "")
+                redirectIOTo(program.output, STDOUT_FILENO, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            
+            execvp(program.name, program.args.data());
+            std::cerr << "Could not exec external program\n" + std::string(std::strerror(errno)) << '\n';
+            exit(EXIT_FAILURE);
+        } else {
+            if (!program.runInBackground)
+                waitForPID(programPID);
+        }
+    }
+    
+    void redirectIOTo(const std::string &file, int fd, int openFlags, int mode = 0) const {
+        int inputFD = open(file.c_str(), openFlags, mode);
+        
+        if (inputFD < 0) {
+            std::cerr << "Could not redirect IO\n" << std::string(std::strerror(errno)) << '\n';
+            exit(EXIT_FAILURE);
+        }
+        
+        dup2(inputFD, fd);
+        close(inputFD);
+    }
+    
+    void waitForPID(const pid_t pid) {
+        int status{};
+        do {
+          waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
 };
 

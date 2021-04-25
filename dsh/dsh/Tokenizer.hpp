@@ -35,7 +35,8 @@ private:
         const char start = input[col];
         
         if (start == '#') return skipComment(input);
-        else if (start == '"') return parseQuotedToken(input);
+        else if (start == '"') return parseQuotedToken(input, '"');
+        else if (start == '\'') return parseQuotedToken(input, '\'');
         else return parseNormalToken(input);
     }
     
@@ -44,11 +45,11 @@ private:
         return "";
     }
     
-    std::string parseQuotedToken(const std::string &input) {
-        auto end = input.find('"', col + 1);
+    std::string parseQuotedToken(const std::string &input, char quote) {
+        auto end = input.find(quote, col + 1);
         
         while (end != std::string::npos && input[end - 1] == '\\')
-            end = input.find('"', end + 1);
+            end = input.find(quote, end + 1);
         
         if (end == std::string::npos) {
             const auto token = input.substr(col + 1);

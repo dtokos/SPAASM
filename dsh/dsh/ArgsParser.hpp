@@ -4,24 +4,7 @@
 #include <arpa/inet.h>
 #include <docopt/docopt.h>
 #include "App.hpp"
-
-static const char USAGE[] =
-R"(dsh
-This program is a simple shell. You can interact with it trough terminal or local UNIX socket.
-Usage:
-  dsh [options]
-  dsh (-h | --help)
-Options:
-  -h --help                       Show this screen.
-  
-  -a ADDRESS --address=ADDRESS    Configures address that the shell will be listening on.
-                                  Accepts valid ipv4 address.
-                                  [default: 0.0.0.0]
-  
-  -p PORT --port=PORT             Configures port that the shell will be listening on.
-                                  Accepts values from <1, 65535> (OS may block listening on reserved ports < 1024).
-                                  [default: 48184]
-)";
+#include "Help.hpp"
 
 struct ArgsParser {
     struct Exception : public std::runtime_error {
@@ -34,6 +17,8 @@ struct ArgsParser {
         return App::Options{
             parseSocketAddress(args["--address"]),
             parseSocketPort(args["--port"]),
+            parseBacklog(args["--backlog"]),
+            parseClientTimeout(args["--timeout"])
         };
     }
     
@@ -58,6 +43,32 @@ private:
             throw ArgsParser::Exception("Option 'port' is invalid");
         } catch (const std::out_of_range &e) {
             throw ArgsParser::Exception("Option 'port' is out of range");
+        }
+    }
+    
+    int parseBacklog(const docopt::value &value) {
+        try {
+            int backlog = std::stoi(value.asString());
+            if (backlog < 1 || backlog > 10) throw std::out_of_range("Option 'backlog' is out of range");
+            
+            return backlog;
+        } catch (const std::invalid_argument &e) {
+            throw ArgsParser::Exception("Option 'backlog' is invalid");
+        } catch (const std::out_of_range &e) {
+            throw ArgsParser::Exception("Option 'backlog' is out of range");
+        }
+    }
+    
+    int parseClientTimeout(const docopt::value &value) {
+        try {
+            int timeout = std::stoi(value.asString());
+            if (timeout < 5 || timeout > 3600) throw std::out_of_range("Option 'timeout' is out of range");
+            
+            return timeout * 1000;
+        } catch (const std::invalid_argument &e) {
+            throw ArgsParser::Exception("Option 'timeout' is invalid");
+        } catch (const std::out_of_range &e) {
+            throw ArgsParser::Exception("Option 'timeout' is out of range");
         }
     }
 };
