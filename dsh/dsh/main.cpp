@@ -13,6 +13,7 @@ int main(int argc, const char *argv[]) {
         auto options = argsParser.parse(argc, argv);
         
         registerHandler(SIGTERM);
+        registerHandler(SIGINT);
         
         app.start(options);
         app.run();

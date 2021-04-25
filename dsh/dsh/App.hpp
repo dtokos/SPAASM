@@ -38,7 +38,7 @@ struct App {
         if (verbose)
             std::cerr << "[DEBUG] Handling signal " << signal << '\n';
         
-        if (signal == SIGTERM) {
+        if (signal == SIGTERM || signal == SIGINT) {
             if (isRoot) {
                 killClients();
                 cleanup();
